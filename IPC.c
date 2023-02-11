@@ -84,7 +84,7 @@ void child(int fdw, int fdr){
 
 int main(int argc, char *argv[])
 {
-    int pipefdEW[2], pipefdOW[2];
+    int pipefdParentWrite[2], pipefdChildWrite[2];
     int n, fdw, fdr;
     char junk[99];
 
@@ -99,13 +99,13 @@ int main(int argc, char *argv[])
     fgets(junk, 99, stdin);  // get rid of the line feed and clean the buffer 
 
 	// Checking for successful pipe creation
-    if (0 > pipe(pipefdEW)){
+    if (0 > pipe(pipefdParentWrite)){
         perror("Pipe");
         return 1;
     }
 
 	// Save parent write fd
-    fdw = pipefdEW[1];
+    fdw = pipefdParentWrite[1];
     
     if (SIG_ERR == signal(SIGINT, graceful)){  // capture control-c
         perror("Signal");
@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
 	// Creating multiple child processes
     while (++k < n)
     {
-        if ( 0 > pipe(k & 1 ? pipefdOW : pipefdEW)){
+        if ( 0 > pipe(k & 1 ? pipefdChildWrite : pipefdParentWrite)){
             perror("pipe3");
             return 1;
         }
@@ -128,10 +128,10 @@ int main(int argc, char *argv[])
             return 1;
         case 0:
 			// child
-            close(k & 1 ? pipefdEW[1] : pipefdOW[1]);
-            close(k & 1 ? pipefdOW[0] : pipefdEW[0]);
+            close(k & 1 ? pipefdParentWrite[1] : pipefdChildWrite[1]);
+            close(k & 1 ? pipefdChildWrite[0] : pipefdParentWrite[0]);
 			// call child with the write fd and read fd
-            child(k & 1 ? pipefdOW[1] : pipefdEW[1], k & 1 ? pipefdEW[0] : pipefdOW[0]); 
+            child(k & 1 ? pipefdChildWrite[1] : pipefdParentWrite[1], k & 1 ? pipefdParentWrite[0] : pipefdChildWrite[0]); 
         default: 
 			// parent
             sleep(1);       
@@ -139,7 +139,7 @@ int main(int argc, char *argv[])
         } 
     }
     
-    fdr = k & 1 ? pipefdEW[0] : pipefdOW[0]; // Parent read last child pipe
+    fdr = k & 1 ? pipefdParentWrite[0] : pipefdChildWrite[0]; // Parent read last child pipe
 
     while (1) // ask, read, write, read loop
     {
