@@ -67,6 +67,7 @@ void child(int fdw, int fdr){
 
             if (k == msg.dest){
                 msg.empty = 1;
+				memset(msg.str, 0, MAXLINE);
             }
 
             break;
