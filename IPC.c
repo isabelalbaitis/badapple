@@ -7,66 +7,66 @@
 #include <signal.h>
 #include <errno.h>
 
-#define MAXLINE 4096 /* Max text line length*/
+#define MAXLINE 4096 // Max text line length
 
-// create a message structure
-struct msg 
+// message structure
+struct message 
 {
-    char k;            // destination node
-    char empty;       //  message status
-    char s[MAXLINE]; //   message string
+    char dest;			// destination node
+    char empty;			// message status
+    char str[MAXLINE]; 	// message string
 };
 
-struct msg mm;  // storage for messages
-int k = 0;      // this process node number
+struct message msg;		// storage for messages
+int k = 0;				// process node number
 
 void graceful2( int sig){  // for child
-    printf("child %d exiting\n", k);
+    printf("Child %d exiting\n", k);
     exit(0);
 }
 
-void graceful(int sig){ // for the master
-    printf("\nmaster begin graceful term of children and self\n");
+void graceful(int sig){ // for parent
+    printf("\nParent begin graceful term of children and self\n");
     kill(SIGINT, 0);
 
     while(1){ 
-        if (0 > wait(NULL)){ // wait for any child to exit and return the child pid
-            if (errno != ECHILD ){ // must be no child error
-                perror("wait"); // unexpected error
-                exit(1);   // exit with error status        
+        if (0 > wait(NULL)){ 		// wait for any child to exit and return the child pid
+            if (errno != ECHILD ){ 	// must be no child error
+                perror("Wait"); 	// unexpected error
+                exit(1);      
             }
 
-            exit(0);  // exit with normal status
+            exit(0);
         }
    } 
 }
 
 void child(int fdw, int fdr){
-    //printf("child %d %d %d\n", k, fdw, fdr);
+
     if (SIG_ERR == signal(SIGINT, graceful2)){  // capture control-c
         perror("Signal");
         exit(1);
     }   
 
-    printf("child %d running\n", k);
+    printf("Child %d running\n", k);
 
     while (1)
     {
-        switch (read(fdr, &mm, sizeof(mm))) // create message
+        switch (read(fdr, &msg, sizeof(msg))) // create message
         {
         case -1:
             fprintf(stderr, "%d ", k );
-            perror("read");
+            perror("Read");
             exit(1);
         case 0:
-            printf("unexpected %d EOF\n", k);
+            printf("Unexpected %d EOF\n", k);
             exit(1);
         default:
-            printf("%d received message to %d that was %s\n", k, mm.k, mm.empty ? "empty" : "not empty");
-            printf("%s\n", mm.s);
+            printf("%d Received message to %d that was %s\n", k, msg.dest, msg.empty ? "empty" : "not empty");
+            printf("%s\n", msg.str);
 
-            if (k == mm.k){    // message is for this child
-                mm.empty = 1; //  mark the message has received
+            if (k == msg.dest){
+                msg.empty = 1;
             }
 
             break;
@@ -74,8 +74,8 @@ void child(int fdw, int fdr){
 
         sleep(1);
     
-        if (0 > write(fdw, &mm, sizeof(mm))){
-            perror("child write");
+        if (0 > write(fdw, &msg, sizeof(msg))){
+            perror("Child write");
             exit(1);
         }
     }
@@ -89,91 +89,93 @@ int main(int argc, char *argv[])
 
     printf("How many nodes would you like? ");
 
-    while ( 1 != scanf("%d", &n) || n < 2){  // take care invalid input, convert string to integer
+	// Invalid input error handling
+    while ( 1 != scanf("%d", &n) || n < 2){
         fgets(junk, 99, stdin);
-        printf("invalid, try again: ");   
+        printf("Invalid, try again: ");   
     }
 
     fgets(junk, 99, stdin);  // get rid of the line feed and clean the buffer 
 
-    if (0 > pipe(pipefdEW)){ // the if is the check the return of the pipe for error, master is 0 so it is even
+	// Checking for successful pipe creation
+    if (0 > pipe(pipefdEW)){
         perror("Pipe");
         return 1;
     }
-   // printf("pipe1 %d %d\n", pipefdEW[0], pipefdEW[1]);
-    fdw = pipefdEW[1]; //save the master write fd, becasue this array can be used many time
+
+	// Save parent write fd
+    fdw = pipefdEW[1];
     
     if (SIG_ERR == signal(SIGINT, graceful)){  // capture control-c
         perror("Signal");
         return 1;
     }
     
-    while (++k < n) // create multiple children
+	// Creating multiple child processes
+    while (++k < n)
     {
         if ( 0 > pipe(k & 1 ? pipefdOW : pipefdEW)){
             perror("pipe3");
             return 1;
         }
-       // printf("pipe2 %d %d %d %d\n", pipefdEW[0], pipefdEW[1], pipefdOW[0], pipefdOW[1]);
 
         switch (fork()) 
         {
-        case -1: // error
+        case -1: 
+			// error
             perror("fork");
             return 1;
-        case 0: // child
-            close(k & 1 ? pipefdEW[1] : pipefdOW[1]); // close unused write pipe
-            close(k & 1 ? pipefdOW[0] : pipefdEW[0]); // close unused read pipe
-            // call child with the write fd and read fd
+        case 0:
+			// child
+            close(k & 1 ? pipefdEW[1] : pipefdOW[1]);
+            close(k & 1 ? pipefdOW[0] : pipefdEW[0]);
+			// call child with the write fd and read fd
             child(k & 1 ? pipefdOW[1] : pipefdEW[1], k & 1 ? pipefdEW[0] : pipefdOW[0]); 
-        default: // parent
-            sleep(1);
-            //close(k & 1 ? pipefdOW[1] : pipefdEW[1]); // close unused write pipe
-            //close(k & 1 ? pipefdEW[0] : pipefdOW[0]); // close unused read pipe          
+        default: 
+			// parent
+            sleep(1);       
             continue;     
         } 
     }
     
-    fdr = k & 1 ? pipefdEW[0] : pipefdOW[0]; // master read last child pipe
-
-    // printf("master %d %d\n", fdw, fdr);
+    fdr = k & 1 ? pipefdEW[0] : pipefdOW[0]; // Parent read last child pipe
 
     while (1) // ask, read, write, read loop
     {
         printf("Enter message: ");
 
-        if ( NULL == fgets(mm.s, MAXLINE, stdin )){
-            perror("keyboard error or EOF");
+        if ( NULL == fgets(msg.str, MAXLINE, stdin )){
+            perror("Keyboard error or EOF");
             return 1;
         }
 
         printf("Enter destination node: ");
  
-        while ( 1 != scanf("%d", &k )){ // get the node number and check for typo
+        while ( 1 != scanf("%d", &k )){
             fgets(junk, 99, stdin);
             printf("Invalid, try again: ");
         }
 
         fgets(junk, 99, stdin);
-        mm.empty = 0;  // message is not empty
-        mm.k = k;      // address message to specified node
+        msg.empty = 0;
+        msg.dest = k;
 
-        if (0 > write(fdw, &mm, sizeof(mm))){
+        if (0 > write(fdw, &msg, sizeof(msg))){
             perror("pipe1 write");
             return 1;
         }
         
-        switch (read(fdr, &mm, sizeof(mm))) // create message
+        switch (read(fdr, &msg, sizeof(msg))) // create message
         {
         case -1:
-            perror("master read");
+            perror("Parent read");
             return 1;
         case 0:
-            printf("unexpected master EOF\n");
+            printf("Unexpected parent EOF\n");
             return 1;
         default:
-            printf("master received message to %d that was %s\n", mm.k, mm.empty ? "empty" : "not empty");
-            printf("%s\n", mm.s);
+            printf("Parent received message to %d that was %s\n", msg.dest, msg.empty ? "empty" : "not empty");
+            printf("%s\n", msg.str);
             break;
         }   
     }
