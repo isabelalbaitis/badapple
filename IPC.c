@@ -62,7 +62,7 @@ void child(int fdw, int fdr){
             printf("Unexpected %d EOF\n", k);
             exit(1);
         default:
-            printf("%d Received message to %d that was %s\n", k, msg.dest, msg.empty ? "empty" : "not empty");
+            printf("%d Has the apple. %d Received message to %d that was %s\n", k, k, msg.dest, msg.empty ? "empty" : "not empty");
             printf("%s\n", msg.str);
 
             if (k == msg.dest){
@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
             printf("Unexpected parent EOF\n");
             return 1;
         default:
-            printf("Parent received message to %d that was %s\n", msg.dest, msg.empty ? "empty" : "not empty");
+            printf("Parent has the apple. Parent received message to %d that was %s\n", msg.dest, msg.empty ? "empty" : "not empty");
             printf("%s\n", msg.str);
             break;
         }   
